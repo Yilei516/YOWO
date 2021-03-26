@@ -1,6 +1,6 @@
-base = /usr/home/sut/Tim-Documents/jhmdb/data/jhmdb
-train = /usr/home/sut/Tim-Documents/jhmdb/data/jhmdb/trainlist.txt
-valid = /usr/home/sut/Tim-Documents/jhmdb/data/jhmdb/testlist.txt
+base = /scratch/ssd002/datasets/cv_project/yowo_jhmdb
+train = /scratch/ssd002/datasets/cv_project/yowo_jhmdb/trainlist.txt
+valid = /scratch/ssd002/datasets/cv_project/yowo_jhmdb/testlist.txt
 names = data/jhmdb21.names
 backup = backup
 gpus  = 0
