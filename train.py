@@ -7,6 +7,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 import torch.backends.cudnn as cudnn
 from torchvision import datasets, transforms
+from torch.utils.data import RandomSampler
 
 import dataset
 import random
@@ -18,6 +19,11 @@ from cfg import parse_cfg
 from region_loss import RegionLoss
 
 from model import YOWO, get_fine_tuning_parameters
+
+logging("============================ starting =============================")
+
+train_n_sample_from = 15 # 1 sample every n_sample_from for both training and testing (for reducing epoch size)
+test_n_sample_from = 1 if opt.evaluate else 30
 
 # Training settings
 opt = parse_opts()
@@ -100,16 +106,24 @@ kwargs = {'num_workers': num_workers, 'pin_memory': True} if use_cuda else {}
 
 # Load resume path if necessary
 if opt.resume_path:
-    print("===================================================================")
-    print('loading checkpoint {}'.format(opt.resume_path))
-    checkpoint = torch.load(opt.resume_path)
-    opt.begin_epoch = checkpoint['epoch'] + 1
-    best_fscore = checkpoint['fscore']
-    model.load_state_dict(checkpoint['state_dict'])
-    optimizer.load_state_dict(checkpoint['optimizer'])
-    model.seen = checkpoint['epoch'] * nsamples
-    print("Loaded model fscore: ", checkpoint['fscore'])
-    print("===================================================================")
+    logging("===================================================================")
+    if '.pth' in opt.resume_path:
+        chkpt = opt.resume_path
+    else:
+        chkpt_core = 'yowo_' + opt.dataset + '_' + str(clip_duration) + 'f'
+        chkpt = sorted([c for c in os.listdir(opt.resume_path) if chkpt_core in c and 'checkpoint.pth' in c])
+        if chkpt:
+            chkpt = os.path.join(opt.resume_path,chkpt[-1])
+    if chkpt:
+        logging('loading checkpoint {}'.format(chkpt))
+        checkpoint = torch.load(chkpt)
+        opt.begin_epoch = checkpoint['epoch'] + 1
+        best_fscore = checkpoint['fscore']
+        model.load_state_dict(checkpoint['state_dict'])
+        optimizer.load_state_dict(checkpoint['optimizer'])
+        model.seen = checkpoint['epoch'] * nsamples
+        logging("Loaded model fscore: ", checkpoint['fscore'])
+        logging("===================================================================")
 
 
 region_loss.seen  = model.seen
@@ -148,26 +162,28 @@ def train(epoch):
     region_loss.l_conf.reset()
     region_loss.l_cls.reset()
     region_loss.l_total.reset()
-
-    train_loader = torch.utils.data.DataLoader(
-        dataset.listDataset(basepath, trainlist, dataset_use=dataset_use, shape=(init_width, init_height),
-                       shuffle=True,
-                       transform=transforms.Compose([
-                           transforms.ToTensor(),
-                       ]), 
-                       train=True, 
-                       seen=cur_model.seen,
-                       batch_size=batch_size,
-                       clip_duration=clip_duration,
-                       num_workers=num_workers),
-        batch_size=batch_size, shuffle=False, **kwargs)
+    train_dataset = dataset.listDataset(basepath, trainlist, dataset_use=dataset_use, shape=(init_width, init_height),
+                                        shuffle=True,
+                                        transform=transforms.Compose([
+                                            transforms.ToTensor(),
+                                        ]), 
+                                        train=True, 
+                                        seen=cur_model.seen,
+                                        batch_size=batch_size,
+                                        clip_duration=clip_duration,
+                                        num_workers=num_workers)
+    rs = RandomSampler(train_dataset,replacement=True, num_samples=int(len(train_dataset)/train_n_sample_from))
+    train_loader = torch.utils.data.DataLoader(train_dataset,sampler=rs,
+                                               batch_size=batch_size, shuffle=False, **kwargs)
 
     lr = adjust_learning_rate(optimizer, processed_batches)
+    nbatch = len(train_loader)
     logging('training at epoch %d, lr %f' % (epoch, lr))
+    logging('total # of batches %d' % (nbatch))
 
     model.train()
-
     for batch_idx, (data, target) in enumerate(train_loader):
+        
         adjust_learning_rate(optimizer, processed_batches)
         processed_batches = processed_batches + 1
 
@@ -180,7 +196,10 @@ def train(epoch):
         loss = region_loss(output, target)
         loss.backward()
         optimizer.step()
-
+        
+        if batch_idx%20 == 0:
+            logging(f'epoch: {epoch}, batch: {batch_idx}/{nbatch}, lr:{lr}, loss: {loss.item()}')
+        
         # save result every 1000 batches
         if processed_batches % 500 == 0: # From time to time, reset averagemeters to see improvements
             region_loss.l_x.reset()
@@ -192,8 +211,7 @@ def train(epoch):
             region_loss.l_total.reset()
 
     t1 = time.time()
-    logging('trained with %f samples/s' % (len(train_loader.dataset)/(t1-t0)))
-    print('')
+    logging('trained with %f samples/s' % ((nbatch*batch_size)/(t1-t0)))
 
 
 
@@ -202,14 +220,14 @@ def test(epoch):
         for i in range(50):
             if truths[i][1] == 0:
                 return i
-
-    test_loader = torch.utils.data.DataLoader(
-    dataset.listDataset(basepath, testlist, dataset_use=dataset_use, shape=(init_width, init_height),
-                   shuffle=False,
-                   transform=transforms.Compose([
-                       transforms.ToTensor()
-                   ]), train=False),
-    batch_size=batch_size, shuffle=False, **kwargs)
+    test_dataset = dataset.listDataset(basepath, testlist, dataset_use=dataset_use, shape=(init_width, init_height),
+                                       shuffle=False,
+                                       transform=transforms.Compose([
+                                           transforms.ToTensor()
+                                       ]), train=False)
+    test_rs = RandomSampler(test_dataset, replacement=True, num_samples=int(len(test_dataset)/test_n_sample_from))
+    test_loader = torch.utils.data.DataLoader(test_dataset, sampler=test_rs,
+                                              batch_size=batch_size, shuffle=False, **kwargs)
 
     num_classes = region_loss.num_classes
     anchors     = region_loss.anchors
@@ -223,7 +241,7 @@ def test(epoch):
     correct_classification = 0.0
     total_detected = 0.0
 
-    nbatch      = file_lines(testlist) // batch_size
+    nbatch      = len(test_loader) #file_lines(testlist) // batch_size
 
     logging('validation at epoch %d' % (epoch))
     model.eval()
@@ -300,13 +318,14 @@ def test(epoch):
             precision = 1.0*correct/(proposals+eps)
             recall = 1.0*correct/(total+eps)
             fscore = 2.0*precision*recall/(precision+recall+eps)
-            logging("[%d/%d] precision: %f, recall: %f, fscore: %f" % (batch_idx, nbatch, precision, recall, fscore))
+            if batch_idx%20 == 0:
+                logging("[%d/%d] precision: %f, recall: %f, fscore: %f" % (batch_idx, nbatch, precision, recall, fscore))
 
     classification_accuracy = 1.0 * correct_classification / (total_detected + eps)
     locolization_recall = 1.0 * total_detected / (total + eps)
 
-    print("Classification accuracy: %.3f" % classification_accuracy)
-    print("Locolization recall: %.3f" % locolization_recall)
+    logging("Classification accuracy: %.3f" % classification_accuracy)
+    logging("Localization recall: %.3f" % locolization_recall)
 
     return fscore
 
@@ -326,8 +345,8 @@ else:
 
         is_best = fscore > best_fscore
         if is_best:
-            print("New best fscore is achieved: ", fscore)
-            print("Previous fscore was: ", best_fscore)
+            logging("New best fscore is achieved: ", fscore)
+            logging("Previous fscore was: ", best_fscore)
             best_fscore = fscore
 
         # Save the model to backup directory
@@ -337,5 +356,5 @@ else:
             'optimizer': optimizer.state_dict(),
             'fscore': fscore
             }
-        save_checkpoint(state, is_best, backupdir, opt.dataset, clip_duration)
+        save_checkpoint(state, is_best, backupdir, opt.dataset, clip_duration, epoch)
         logging('Weights are saved to backup directory: %s' % (backupdir))

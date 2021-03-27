@@ -6,7 +6,7 @@ def parse_opts():
     parser.add_argument('--n_classes', default=24, type=int, help='Number of classes (ucf101-24: 24, jhmdb-21: 21)')
     parser.add_argument('--dataset', default='ucf101-24', type=str, help='Select dataset from (ucf101-24, jhmdb-21)')
     parser.add_argument('--begin_epoch', default=1, type=int, help='Training begins at this epoch. Previous trained model indicated by resume_path is loaded.')
-    parser.add_argument('--end_epoch', default=25, type=int, help='Training ends at this epoch.')
+    parser.add_argument('--end_epoch', default=400, type=int, help='Training ends at this epoch.') # default was 25
     parser.add_argument('--resume_path', default='', type=str, help='Continue training from pretrained (.pth)')
     parser.add_argument('--data_cfg', default='', type=str, help='Configuration related to data')
     parser.add_argument('--cfg_file', default='', type=str, help='Configuration file')

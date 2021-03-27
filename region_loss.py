@@ -271,7 +271,7 @@ class RegionLoss(nn.Module):
         self.l_cls.update(loss_cls.data.item(), self.batch)
         self.l_total.update(loss.data.item(), self.batch)
 
-
+        """
         if False:
             print('-----------------------------------')
             print('        activation : %f' % (t1 - t0))
@@ -286,4 +286,5 @@ class RegionLoss(nn.Module):
                 self.l_y.val, self.l_y.avg, self.l_w.val, self.l_w.avg,
                 self.l_h.val, self.l_h.avg, self.l_conf.val, self.l_conf.avg,
                 self.l_cls.val, self.l_cls.avg, self.l_total.val, self.l_total.avg))
+        """
         return loss

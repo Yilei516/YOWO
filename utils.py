@@ -31,8 +31,8 @@ class AverageMeter(object):
         self.avg = self.sum / self.count
 
 
-def save_checkpoint(state, is_best, directory, dataset, clip_duration):
-    torch.save(state, '%s/%s_checkpoint.pth' % (directory, 'yowo_' + dataset + '_' + str(clip_duration) + 'f'))
+def save_checkpoint(state, is_best, directory, dataset, clip_duration, epoch):
+    torch.save(state, '%s/%s_checkpoint.pth' % (directory, 'yowo_' + dataset + '_' + str(clip_duration) + 'f_'+str(epoch)))
     if is_best:
         shutil.copyfile('%s/%s_checkpoint.pth' % (directory, 'yowo_' + dataset + '_' + str(clip_duration) + 'f'),
                         '%s/%s_best.pth' % (directory, 'yowo_' + dataset + '_' + str(clip_duration) + 'f'))
