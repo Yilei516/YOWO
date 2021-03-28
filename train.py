@@ -53,7 +53,8 @@ num_workers   = int(data_options['num_workers'])
 train_n_sample_from = int(15/ngpus) # 1 sample every n_sample_from for both training and testing (for reducing epoch size)
 test_n_sample_from = 1 if opt.evaluate else int(30/ngpus)
 
-batch_size    = int(net_options['batch'])*ngpus
+net_options['batch'] = ngpus*int(net_options['batch'])
+batch_size    = net_options['batch']
 clip_duration = int(net_options['clip_duration'])
 max_batches   = int(net_options['max_batches'])
 learning_rate = float(net_options['learning_rate'])
