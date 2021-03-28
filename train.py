@@ -50,8 +50,8 @@ ngpus = len(gpu_ids) # ngpus         = len(gpus.split(','))
 num_workers   = int(data_options['num_workers'])
 
 # Set up sample size per epoch
-train_n_sample_from = int(15/ngpus) # 1 sample every n_sample_from for both training and testing (for reducing epoch size)
-test_n_sample_from = 1 if opt.evaluate else int(30/ngpus)
+train_n_sample_from = 1 if dataset_use != 'ucf101-24' else 15
+test_n_sample_from = 1 if opt.evaluate or dataset_use != 'ucf101-24' else 30
 
 net_options['batch'] = ngpus*int(net_options['batch'])
 batch_size    = net_options['batch']
@@ -119,8 +119,10 @@ if opt.resume_path:
         chkpt = opt.resume_path
     else:
         chkpt_core = 'yowo_' + opt.dataset + '_' + str(clip_duration) + 'f'
-        chkpt = sorted([c for c in os.listdir(opt.resume_path) if chkpt_core in c and 'checkpoint.pth' in c])
+        chkpt = [c for c in os.listdir(opt.resume_path) if chkpt_core in c and 'checkpoint.pth' in c]
         if chkpt:
+            max_len = max([len(c) for c in chkpt])
+            chkpt = sorted([c for c in chkpt if len(c)==max_len])
             chkpt = os.path.join(opt.resume_path,chkpt[-1])
     if chkpt:
         logging('loading checkpoint {}'.format(chkpt))
