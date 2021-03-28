@@ -9,6 +9,8 @@ import torch.backends.cudnn as cudnn
 from torchvision import datasets, transforms
 from torch.utils.data import RandomSampler
 
+import wandb
+
 import dataset
 import random
 import math
@@ -22,10 +24,6 @@ from model import YOWO, get_fine_tuning_parameters
 
 # Training settings
 opt = parse_opts()
-
-# Set up sample size
-train_n_sample_from = 3 # 1 sample every n_sample_from for both training and testing (for reducing epoch size)
-test_n_sample_from = 1 if opt.evaluate else 10
 
 # which dataset to use
 dataset_use   = opt.dataset
@@ -43,12 +41,17 @@ basepath      = data_options['base']
 trainlist     = data_options['train']
 testlist      = data_options['valid']
 backupdir     = data_options['backup']
+
 # number of training samples
 nsamples      = file_lines(trainlist)
 gpu_ids = list(range(torch.cuda.device_count()))
 gpus = ','.join([str(g) for g in gpu_ids]) # gpus          = data_options['gpus']  # e.g. 0,1,2,3
 ngpus = len(gpu_ids) # ngpus         = len(gpus.split(','))
 num_workers   = int(data_options['num_workers'])
+
+# Set up sample size per epoch
+train_n_sample_from = int(15/ngpus) # 1 sample every n_sample_from for both training and testing (for reducing epoch size)
+test_n_sample_from = 1 if opt.evaluate else int(30/ngpus)
 
 batch_size    = int(net_options['batch'])*ngpus
 clip_duration = int(net_options['clip_duration'])
@@ -121,6 +124,7 @@ if opt.resume_path:
     if chkpt:
         logging('loading checkpoint {}'.format(chkpt))
         checkpoint = torch.load(chkpt)
+        wandb_id = checkpoint.get('wandb_id',None)
         opt.begin_epoch = checkpoint['epoch'] + 1
         best_fscore = checkpoint['fscore']
         model.load_state_dict(checkpoint['state_dict'])
@@ -129,7 +133,14 @@ if opt.resume_path:
         logging(f"Loaded model fscore: {checkpoint['fscore']}")
         logging("===================================================================")
 
+# Set up wandb log
+config = {**vars(opt), **data_options, **net_options}
+if 'wandb_id' not in globals() or not wandb_id: wandb_id = wandb.util.generate_id()
+logging(f'wandb_id: {wandb_id}')
+wandb.init(project=f'YOWO_{opt.dataset.upper()}', entity='wuyilei516', config=config, id=wandb_id, resume="allow")
+wandb.watch(model)
 
+# Final sest up
 region_loss.seen  = model.seen
 processed_batches = model.seen//batch_size
 
@@ -201,6 +212,8 @@ def train(epoch):
         
         if batch_idx%20 == 0:
             logging(f'epoch: {epoch}, batch: {batch_idx}/{nbatch}, lr:{lr}, loss: {loss.item()}')
+            wandb.log({"loss": loss})
+            wandb.log({"lr": lr})
         
         # save result every 1000 batches
         if processed_batches % 500 == 0: # From time to time, reset averagemeters to see improvements
@@ -324,10 +337,16 @@ def test(epoch):
                 logging("[%d/%d] precision: %f, recall: %f, fscore: %f" % (batch_idx, nbatch, precision, recall, fscore))
 
     classification_accuracy = 1.0 * correct_classification / (total_detected + eps)
-    locolization_recall = 1.0 * total_detected / (total + eps)
+    localization_recall = 1.0 * total_detected / (total + eps)
 
     logging("Classification accuracy: %.3f" % classification_accuracy)
-    logging("Localization recall: %.3f" % locolization_recall)
+    logging("Localization recall: %.3f" % localization_recall)
+
+    wandb.log({"Precision": precision})
+    wandb.log({"Recall": recall})
+    wandb.log({"Fscore": fscore})
+    wandb.log({"Classification accuracy": classification_accuracy})
+    wandb.log({"Localization recall": localization_recall})
 
     return fscore
 
@@ -353,6 +372,7 @@ else:
 
         # Save the model to backup directory
         state = {
+            'wandb_id': wandb_id,
             'epoch': epoch,
             'state_dict': model.state_dict(),
             'optimizer': optimizer.state_dict(),
