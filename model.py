@@ -77,6 +77,7 @@ class YOWO(nn.Module):
 
 
     def forward(self, input):
+
         x_3d = input # Input clip
         x_2d = input[:, :, -1, :, :] # Last frame of the clip that is read
 

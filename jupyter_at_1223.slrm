@@ -1,6 +1,6 @@
 #!/bin/bash
-#SBATCH -p rtx6000
-#SBATCH --qos normal
+#SBATCH -p interactive
+#SBATCH --qos nopreemption
 #SBATCH --gres=gpu:1
 #SBATCH -c 1
 #SBATCH --mem=8G

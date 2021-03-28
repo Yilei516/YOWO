@@ -34,10 +34,8 @@ class AverageMeter(object):
 def save_checkpoint(state, is_best, directory, dataset, clip_duration, epoch):
     torch.save(state, '%s/%s_checkpoint.pth' % (directory, 'yowo_' + dataset + '_' + str(clip_duration) + 'f_'+str(epoch)))
     if is_best:
-        shutil.copyfile('%s/%s_checkpoint.pth' % (directory, 'yowo_' + dataset + '_' + str(clip_duration) + 'f'),
+        shutil.copyfile('%s/%s_checkpoint.pth' % (directory, 'yowo_' + dataset + '_' + str(clip_duration) + 'f_'+str(epoch)),
                         '%s/%s_best.pth' % (directory, 'yowo_' + dataset + '_' + str(clip_duration) + 'f'))
-
-
 
 def sigmoid(x):
     return 1.0/(math.exp(-x)+1.)
@@ -615,7 +613,7 @@ def do_detect(model, img, conf_thresh, nms_thresh, use_cuda=1):
 def read_data_cfg(datacfg):
     options = dict()
     options['gpus'] = '0,1,2,3'
-    options['num_workers'] = '10'
+    options['num_workers'] = '4'
     with open(datacfg, 'r') as fp:
         lines = fp.readlines()
 

@@ -1,8 +1,8 @@
 #!/bin/bash
 
 PORT=$1
-CPUs=${2:-4}
-GPUs=${3:-1}
+CPUs=${2:-8}
+GPUs=${3:-2}
 MEM=${4:-'8G'}
 
 if [ -z "$PORT" ]; then

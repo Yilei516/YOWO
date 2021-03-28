@@ -35,6 +35,8 @@ MANIFEST
 
 # log files
 *.log
+runs/
+wandb/
 
 # text files
 *.txt

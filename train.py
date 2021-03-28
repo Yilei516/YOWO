@@ -20,13 +20,13 @@ from region_loss import RegionLoss
 
 from model import YOWO, get_fine_tuning_parameters
 
-logging("============================ starting =============================")
-
-train_n_sample_from = 15 # 1 sample every n_sample_from for both training and testing (for reducing epoch size)
-test_n_sample_from = 1 if opt.evaluate else 30
-
 # Training settings
 opt = parse_opts()
+
+# Set up sample size
+train_n_sample_from = 3 # 1 sample every n_sample_from for both training and testing (for reducing epoch size)
+test_n_sample_from = 1 if opt.evaluate else 10
+
 # which dataset to use
 dataset_use   = opt.dataset
 assert dataset_use == 'ucf101-24' or dataset_use == 'jhmdb-21', 'invalid dataset'
@@ -45,11 +45,12 @@ testlist      = data_options['valid']
 backupdir     = data_options['backup']
 # number of training samples
 nsamples      = file_lines(trainlist)
-gpus          = data_options['gpus']  # e.g. 0,1,2,3
-ngpus         = len(gpus.split(','))
+gpu_ids = list(range(torch.cuda.device_count()))
+gpus = ','.join([str(g) for g in gpu_ids]) # gpus          = data_options['gpus']  # e.g. 0,1,2,3
+ngpus = len(gpu_ids) # ngpus         = len(gpus.split(','))
 num_workers   = int(data_options['num_workers'])
 
-batch_size    = int(net_options['batch'])
+batch_size    = int(net_options['batch'])*ngpus
 clip_duration = int(net_options['clip_duration'])
 max_batches   = int(net_options['max_batches'])
 learning_rate = float(net_options['learning_rate'])
@@ -95,9 +96,12 @@ if use_cuda:
 model = YOWO(opt)
 
 model       = model.cuda()
-model       = nn.DataParallel(model, device_ids=None) # in multi-gpu case
+model       = nn.DataParallel(model, device_ids=gpu_ids) # in multi-gpu case
 model.seen  = 0
+
+logging("============================ starting =============================")
 print(model)
+logging(f"# of GPUs: {ngpus}, batch_size: {batch_size}")
 
 parameters = get_fine_tuning_parameters(model, opt)
 optimizer = optim.SGD(parameters, lr=learning_rate/batch_size, momentum=momentum, dampening=0, weight_decay=decay*batch_size)
@@ -122,7 +126,7 @@ if opt.resume_path:
         model.load_state_dict(checkpoint['state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer'])
         model.seen = checkpoint['epoch'] * nsamples
-        logging("Loaded model fscore: ", checkpoint['fscore'])
+        logging(f"Loaded model fscore: {checkpoint['fscore']}")
         logging("===================================================================")
 
 
@@ -132,8 +136,6 @@ processed_batches = model.seen//batch_size
 init_width        = int(net_options['width'])
 init_height       = int(net_options['height'])
 init_epoch        = model.seen//nsamples 
-
-
 
 def adjust_learning_rate(optimizer, batch):
     lr = learning_rate
@@ -184,7 +186,7 @@ def train(epoch):
     model.train()
     for batch_idx, (data, target) in enumerate(train_loader):
         
-        adjust_learning_rate(optimizer, processed_batches)
+        lr = adjust_learning_rate(optimizer, processed_batches)
         processed_batches = processed_batches + 1
 
         if use_cuda:
@@ -345,8 +347,8 @@ else:
 
         is_best = fscore > best_fscore
         if is_best:
-            logging("New best fscore is achieved: ", fscore)
-            logging("Previous fscore was: ", best_fscore)
+            logging(f"New best fscore is achieved: {fscore}" )
+            logging(f"Previous fscore was: {best_fscore}")
             best_fscore = fscore
 
         # Save the model to backup directory

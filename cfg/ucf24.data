@@ -3,4 +3,4 @@ train = /scratch/ssd002/datasets/cv_project/yowo_ucf24/trainlist.txt
 valid = /scratch/ssd002/datasets/cv_project/yowo_ucf24/testlist.txt
 names = data/ucf24.names
 backup = backup
-gpus  = 0
+gpus  = 0,1,2,3
