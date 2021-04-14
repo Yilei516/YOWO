@@ -1,0 +1,21 @@
+#!/bin/bash
+#SBATCH --partition=rtx6000
+#SBATCH --qos=normal
+#SBATCH --cpus-per-gpu=4
+#SBATCH --gres=gpu:1
+#SBATCH --mem=8G
+#SBATCH --job-name=test_j
+#SBATCH --output=output_jhdmb-21_eval.log
+#SBATCH --ntasks=1
+
+echo Running on $(hostname)
+date
+
+
+python video_mAP.py --dataset jhmdb-21 \
+	 				--data_cfg cfg/jhmdb21.data \
+	 				--cfg_file cfg/jhmdb21.cfg \
+	 				--n_classes 21 \
+	 				--backbone_3d resnext101 \
+	 				--backbone_2d darknet \
+	 				--resume_path backup/yowo_jhmdb-21_16f_best.pth \

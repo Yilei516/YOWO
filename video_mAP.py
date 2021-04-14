@@ -26,7 +26,7 @@ net_options   = parse_cfg(cfgfile)[0]
 loss_options  = parse_cfg(cfgfile)[1]
 
 base_path     = data_options['base']
-testlist      = os.path.join(base_path, 'testlist_video.txt')
+testlist      = os.path.join(base_path, 'testlist_video.txt') # os.path.join(base_path, 'testlist_video.txt')
 
 clip_duration = int(net_options['clip_duration'])
 anchors       = loss_options['anchors'].split(',')
